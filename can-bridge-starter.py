@@ -14,7 +14,7 @@ import time
 import pathlib
 
 PORT = 23
-LEASE_FILE = "/var/lib/misc/dnsmasq.leases"
+LEASE_FILE = "/var/lib/NetworkManager/dnsmasq-wlan0.leases"
 CONNECT_TIMEOUT = 2   # seconds per probe
 RETRY_INTERVAL  = 30  # seconds between discovery rounds
 
