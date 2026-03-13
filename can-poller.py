@@ -96,6 +96,17 @@ def redraw(seen: dict, total: int, elapsed: float):
     sys.stdout.flush()
 
 
+# ── Service summary (non-TTY) ─────────────────────────────────────────────────
+def log_summary(seen: dict, total: int, elapsed: float):
+    ids = ", ".join(f"0x{cid:03X}:{seen[cid][0]}" for cid in sorted(seen))
+    d201 = decode_201(seen[0x201][1]) if 0x201 in seen else None
+    if d201:
+        dec = f"  0x201: RPM={d201['rpm']} Speed={d201['speed_kmh']}km/h Gas={d201['throttle_pct']}%"
+    else:
+        dec = ""
+    print(f"[summary] {total} frames in {elapsed:.0f}s | {ids}{dec}", flush=True)
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main():
     host = sys.argv[1] if len(sys.argv) > 1 else HOST
@@ -114,18 +125,20 @@ def main():
     print("Connected. Enabling binary mode …", flush=True)
     sock.sendall(bytes([0xE7]))
 
-    parser    = GVRETParser()
-    seen      = {}
-    total     = 0
-    start     = time.monotonic()
-    last_draw = 0.0
+    parser       = GVRETParser()
+    seen         = {}
+    total        = 0
+    start        = time.monotonic()
+    last_draw    = 0.0
+    is_tty       = sys.stdout.isatty()
+    interval     = 0.1 if is_tty else 10.0
 
     try:
         while True:
             try:
                 chunk = sock.recv(4096)
                 if not chunk:
-                    print("\nConnection closed by device.")
+                    print("\nConnection closed by device.", flush=True)
                     break
                 for can_id, data in parser.feed(chunk):
                     total += 1
@@ -139,8 +152,11 @@ def main():
                 pass
 
             now = time.monotonic()
-            if now - last_draw >= 0.1:
-                redraw(seen, total, now - start)
+            if now - last_draw >= interval:
+                if is_tty:
+                    redraw(seen, total, now - start)
+                else:
+                    log_summary(seen, total, now - start)
                 last_draw = now
 
     except KeyboardInterrupt:
@@ -150,8 +166,9 @@ def main():
         mqtt.loop_stop()
         mqtt.disconnect()
 
-    redraw(seen, total, time.monotonic() - start)
-    print("\nStopped.")
+    if is_tty:
+        redraw(seen, total, time.monotonic() - start)
+    print("\nStopped.", flush=True)
 
 
 if __name__ == "__main__":
