@@ -14,6 +14,9 @@ BIN_DIR="/usr/local/bin"
 SERVICE_DIR="/etc/systemd/system"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo "==> Installing Python dependencies"
+pip3 install -r "${SCRIPT_DIR}/requirements.txt" --quiet
+
 echo "==> Installing fiesta-can-bridge to ${INSTALL_DIR}"
 
 install -d "${INSTALL_DIR}"
