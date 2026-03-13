@@ -11,9 +11,12 @@ Usage:  python can-poller.py [host] [port]
 """
 
 import json
+import queue
+import selectors
 import socket
 import struct
 import sys
+import threading
 import time
 
 import paho.mqtt.client as mqtt_lib
@@ -45,66 +48,77 @@ def decode_201(data: bytes) -> dict | None:
 class GVRETParser:
     def __init__(self):
         self._buf = bytearray()
+        self._pos = 0
 
     def feed(self, chunk: bytes):
         self._buf.extend(chunk)
         while True:
-            idx = self._buf.find(MAGIC)
+            idx = self._buf.find(MAGIC, self._pos)
             if idx == -1:
-                self._buf.clear()
+                # Skip past everything except the last 10 bytes (potential partial frame)
+                self._pos = max(0, len(self._buf) - 10)
                 break
-            if idx > 0:
-                del self._buf[:idx]
-
-            if len(self._buf) < 11:
+            if len(self._buf) < idx + 2:
                 break
-
-            if self._buf[1] != CMD_CAN:
-                del self._buf[0]
+            if self._buf[idx + 1] != CMD_CAN:
+                self._pos = idx + 1
                 continue
-
-            len_bus = self._buf[10]
+            if len(self._buf) < idx + 11:
+                break
+            len_bus = self._buf[idx + 10]
             dlc     = len_bus & 0x0F
             pkt_len = 11 + dlc + 1
-
-            if len(self._buf) < pkt_len:
+            if len(self._buf) < idx + pkt_len:
                 break
-
-            raw_id = struct.unpack_from("<I", self._buf, 6)[0]
+            raw_id = struct.unpack_from("<I", self._buf, idx + 6)[0]
             can_id = raw_id & 0x7FFFFFFF
-            data   = bytes(self._buf[11 : 11 + dlc])
-            del self._buf[:pkt_len]
-
+            data   = bytes(self._buf[idx + 11 : idx + 11 + dlc])
+            self._pos = idx + pkt_len
             yield can_id, data
+
+        # Compact once the consumed prefix exceeds 4 KB
+        if self._pos > 4096:
+            del self._buf[:self._pos]
+            self._pos = 0
 
 
 # ── Display ───────────────────────────────────────────────────────────────────
 def redraw(seen: dict, total: int, elapsed: float):
-    sys.stdout.write("\033[2J\033[H")
-    print(f"  GVRET live  —  {total} frames  ({elapsed:.0f}s)  Ctrl-C to stop\n")
-    print(f"  {'ID':>6}  {'count':>7}  {'last bytes':<32}  decoded")
-    print(f"  {'-'*6}  {'-'*7}  {'-'*32}  {'-'*40}")
+    lines = [
+        "\033[2J\033[H",
+        f"  GVRET live  —  {total} frames  ({elapsed:.0f}s)  Ctrl-C to stop\n\n",
+        f"  {'ID':>6}  {'count':>7}  {'last bytes':<32}  decoded\n",
+        f"  {'-'*6}  {'-'*7}  {'-'*32}  {'-'*40}\n",
+    ]
     for can_id in sorted(seen):
-        count, data = seen[can_id]
+        count, data, decoded = seen[can_id]
         hex_str = data.hex(" ").upper()
         if can_id == 0x201:
-            d = decode_201(data)
-            extra = f"RPM={d['rpm']}  Speed={d['speed_kmh']}km/h  Gas={d['throttle_pct']}%" if d else "(too short)"
+            extra = (f"RPM={decoded['rpm']}  Speed={decoded['speed_kmh']}km/h  Gas={decoded['throttle_pct']}%"
+                     if decoded else "(too short)")
         else:
             extra = ""
-        print(f"  0x{can_id:03X}  {count:>7}  {hex_str:<32}  {extra}")
+        lines.append(f"  0x{can_id:03X}  {count:>7}  {hex_str:<32}  {extra}\n")
+    sys.stdout.write("".join(lines))
     sys.stdout.flush()
 
 
 # ── Service summary (non-TTY) ─────────────────────────────────────────────────
 def log_summary(seen: dict, total: int, elapsed: float):
     ids = ", ".join(f"0x{cid:03X}:{seen[cid][0]}" for cid in sorted(seen))
-    d201 = decode_201(seen[0x201][1]) if 0x201 in seen else None
-    if d201:
-        dec = f"  0x201: RPM={d201['rpm']} Speed={d201['speed_kmh']}km/h Gas={d201['throttle_pct']}%"
+    decoded = seen[0x201][2] if 0x201 in seen else None
+    if decoded:
+        dec = f"  0x201: RPM={decoded['rpm']} Speed={decoded['speed_kmh']}km/h Gas={decoded['throttle_pct']}%"
     else:
         dec = ""
     print(f"[summary] {total} frames in {elapsed:.0f}s | {ids}{dec}", flush=True)
+
+
+# ── MQTT worker ───────────────────────────────────────────────────────────────
+def _mqtt_worker(mqtt_client: mqtt_lib.Client, q: queue.SimpleQueue):
+    while True:
+        topic, payload = q.get()
+        mqtt_client.publish(topic, payload)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -117,13 +131,19 @@ def main():
     mqtt.connect_async(MQTT_HOST, MQTT_PORT)
     mqtt.loop_start()
 
+    publish_queue: queue.SimpleQueue = queue.SimpleQueue()
+    threading.Thread(target=_mqtt_worker, args=(mqtt, publish_queue), daemon=True).start()
+
     print(f"Connecting to GVRET {host}:{port} …", flush=True)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(10)
     sock.connect((host, port))
-    sock.settimeout(0.1)
     print("Connected. Enabling binary mode …", flush=True)
     sock.sendall(bytes([0xE7]))
+    sock.setblocking(False)
+
+    sel = selectors.DefaultSelector()
+    sel.register(sock, selectors.EVENT_READ)
 
     parser       = GVRETParser()
     seen         = {}
@@ -135,21 +155,25 @@ def main():
 
     try:
         while True:
-            try:
-                chunk = sock.recv(4096)
-                if not chunk:
-                    print("\nConnection closed by device.", flush=True)
-                    break
-                for can_id, data in parser.feed(chunk):
-                    total += 1
-                    prev_count = seen[can_id][0] if can_id in seen else 0
-                    seen[can_id] = (prev_count + 1, data)
-                    if can_id == 0x201:
-                        d = decode_201(data)
-                        if d:
-                            mqtt.publish("fiesta/can/201", json.dumps(d))
-            except socket.timeout:
-                pass
+            events = sel.select(timeout=interval)
+            if events:
+                while True:
+                    try:
+                        chunk = sock.recv(4096)
+                        if not chunk:
+                            print("\nConnection closed by device.", flush=True)
+                            raise StopIteration
+                        for can_id, data in parser.feed(chunk):
+                            total += 1
+                            entry   = seen.get(can_id)
+                            decoded = None
+                            if can_id == 0x201:
+                                decoded = decode_201(data)
+                                if decoded:
+                                    publish_queue.put(("fiesta/can/201", json.dumps(decoded)))
+                            seen[can_id] = ((entry[0] + 1 if entry else 1), data, decoded)
+                    except BlockingIOError:
+                        break
 
             now = time.monotonic()
             if now - last_draw >= interval:
@@ -159,9 +183,10 @@ def main():
                     log_summary(seen, total, now - start)
                 last_draw = now
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, StopIteration):
         pass
     finally:
+        sel.close()
         sock.close()
         mqtt.loop_stop()
         mqtt.disconnect()
