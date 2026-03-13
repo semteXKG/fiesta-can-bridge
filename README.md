@@ -11,19 +11,12 @@ Python tools for sniffing and decoding the **Ford Fiesta MK5 (>2006) MS-CAN bus*
 
 ## Scripts
 
-### `gvret_201.py` — Live CAN dashboard
+### `can-poller.py` — Live CAN dashboard
 Connects to the GVRET device, shows all received CAN IDs with frame counts and last bytes, and decodes **0x201** (RPM / Speed / Gas pedal) in real time.
 
 ```
-python gvret_201.py [host] [port]
-python gvret_201.py               # defaults: 10.0.0.50:23
-```
-
-### `obd2_test.py` — OBD-II poll test
-Sends a single OBD-II Mode 01 PID 0x0C (Engine RPM) request to `0x7DF` and waits for a response on `0x7E8`. Confirms whether the ECU is reachable via the MS-CAN gateway.
-
-```
-python obd2_test.py [host] [port]
+python can-poller.py [host] [port]
+python can-poller.py               # defaults: 10.0.0.50:23
 ```
 
 ## 0x201 Decode Reference
@@ -37,6 +30,34 @@ python obd2_test.py [host] [port]
 ## Full Protocol Reference
 
 See [`AGENT.md`](AGENT.md) for the complete MS-CAN message catalogue, GVRET binary protocol details, OBD-II notes, and observed message frequencies.
+
+## Raspberry Pi Install
+
+Run on the Pi (carpi) as root to install the tools system-wide:
+
+```bash
+sudo bash install.sh
+```
+
+Or deploy directly from a dev machine:
+
+```bash
+ssh semtex@10.0.0.211 'sudo bash -s' < install.sh
+```
+
+This installs the script to `/usr/local/lib/fiesta-can-bridge/`, creates a
+wrapper command on `PATH`, and enables a systemd service that starts automatically at boot.
+
+| Command | Description |
+|---------|-------------|
+| `can-dashboard [host] [port]` | Live CAN frame monitor |
+
+### Service management
+
+```bash
+systemctl status can-bridge
+journalctl -u can-bridge -f
+```
 
 ## Requirements
 
