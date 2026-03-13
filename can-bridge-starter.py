@@ -74,4 +74,5 @@ def discover(port: int) -> str:
 
 host = discover(PORT)
 script = pathlib.Path(__file__).parent / "can-poller.py"
+# Use the same interpreter that's running this script (venv python)
 os.execv(sys.executable, [sys.executable, str(script), host, str(PORT)])

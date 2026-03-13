@@ -15,7 +15,8 @@ SERVICE_DIR="/etc/systemd/system"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Installing Python dependencies"
-pip3 install -r "${SCRIPT_DIR}/requirements.txt" --quiet
+python3 -m venv "${INSTALL_DIR}/venv"
+"${INSTALL_DIR}/venv/bin/pip" install -q -r "${SCRIPT_DIR}/requirements.txt"
 
 echo "==> Installing fiesta-can-bridge to ${INSTALL_DIR}"
 
@@ -26,7 +27,7 @@ install -m 0755 "${SCRIPT_DIR}/can-bridge-starter.py" "${INSTALL_DIR}/can-bridge
 # Wrapper script so the tool is on PATH without a .py suffix
 cat > "${BIN_DIR}/can-dashboard" <<'EOF'
 #!/usr/bin/env bash
-exec python3 /usr/local/lib/fiesta-can-bridge/can-bridge-starter.py "$@"
+exec /usr/local/lib/fiesta-can-bridge/venv/bin/python /usr/local/lib/fiesta-can-bridge/can-bridge-starter.py "$@"
 EOF
 chmod 0755 "${BIN_DIR}/can-dashboard"
 
