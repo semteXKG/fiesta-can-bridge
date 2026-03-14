@@ -140,20 +140,20 @@ Bytes 1–8: vehicle ID
 
 ---
 
-## Observed IDs on this vehicle (not in official spec)
+## Observed IDs on this vehicle (not yet decoded)
 
-| ID | Observed bytes (last) | Notes |
-|----|----------------------|-------|
-| 0x040 | `07 D9 93 F4 A3 00 00 00` | Unknown |
-| 0x046 | `08 DD 69 AD 92 00 00 00` | Unknown |
-| 0x090 | varies | Unknown, ~75 Hz |
-| 0x200 | `03 8F 02 89 02 89 00` | Unknown, ~100 Hz |
-| 0x210 | `FF FE 3C A4 40 00 xx` | Unknown, ~75 Hz, last byte increments |
-| 0x230 | `00 01 66 00 64 xx xx 80` | Unknown, ~100 Hz |
-| 0x430 | `3D 00 Cxx 00 00 00 20` | Unknown, ~50 Hz |
-| 0x4B0 | `27 10 27 10 27 10 27 10` | Constant sentinel pattern |
-| 0x620 | `00 24 12 30 00 00 00 04` | Low rate ~10 Hz |
-| 0x630 | `88 01 7F 00 00 64 51 51` | ~1 Hz |
+| ID | Observed bytes (stationary) | Rate | Likely source | Notes |
+|----|---------------------------|------|---------------|-------|
+| 0x040 | `07 D9 93 F4 A3 00 00 00` | — | BCM | Static status/config from Body Control Module |
+| 0x046 | `08 DD 69 AD 92 00 00 00` | — | BCM | Static status/config, similar pattern to 0x040 |
+| 0x090 | varies | ~75 Hz | Unknown | High-rate dynamic signal; could be seatbelt/environment sensor |
+| 0x200 | `03 8F 02 89 02 89 00` | ~100 Hz | IPC gateway | Adjacent to 0x201, high-rate — likely additional powertrain data (throttle position or torque?) |
+| 0x210 | `FF FE 3C A4 40 00 xx` | ~75 Hz | EATC or IPC | Last byte increments (counter/sequence); on Mondeo MS-CAN this ID is EATC-sourced |
+| 0x230 | `00 01 66 00 64 xx xx 80` | ~100 Hz | IPC gateway | Bytes 5-6 vary; HS-CAN 0x230 on other Fords carries gear + trans fluid temp |
+| 0x430 | `3D 00 Cxx 00 00 00 20` | ~50 Hz | IPC/BCM | Adjacent to 0x420/0x428 engine cluster; likely another engine diagnostic |
+| 0x4B0 | `27 10 27 10 27 10 27 10` | ~75 Hz | ABS/ESP | **Probable 4× wheel speeds** — 4 uint16_BE pairs, all 0x2710 when stationary (same encoding as 0x201 speed: val/100-100 = 0 km/h). Needs driving data to confirm byte order (FL/FR/RL/RR) |
+| 0x620 | `00 24 12 30 00 00 00 04` | ~10 Hz | Network mgmt | Low-rate, static-ish; possibly network management or diagnostic broadcast |
+| 0x630 | `88 01 7F 00 00 64 51 51` | ~1 Hz | EATC/HVAC | Very low rate; on other Fords 0x620/0x630 range carries HVAC/climate data |
 
 ---
 

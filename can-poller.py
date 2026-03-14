@@ -33,8 +33,9 @@ MAGIC   = 0xF1
 CMD_CAN = 0x00
 
 
-# ── Decoder for 0x201 ────────────────────────────────────────────────────────
+# ── CAN frame decoders ────────────────────────────────────────────────────────
 def decode_201(data: bytes) -> dict | None:
+    """RPM / Speed / Gas pedal (50 Hz)"""
     if len(data) < 8:
         return None
     rpm       = struct.unpack_from(">H", data, 0)[0] // 4
@@ -42,6 +43,41 @@ def decode_201(data: bytes) -> dict | None:
     gas_raw   = struct.unpack_from(">H", data, 6)[0]
     throttle  = round(max(0.0, (gas_raw - 0x80) * 100.0 / 50944.0), 1)
     return {"rpm": rpm, "speed_kmh": speed_kmh, "throttle_pct": throttle}
+
+
+_BRAKE_360 = {0x60: "off", 0x68: "touch", 0x78: "pressed"}
+
+def decode_360(data: bytes) -> dict | None:
+    """Brake pedal 3-level (100 Hz)"""
+    if len(data) < 7:
+        return None
+    return {"brake_pedal": _BRAKE_360.get(data[5], f"0x{data[5]:02X}")}
+
+
+_BRAKE_420 = {0x00: "off", 0x10: "touch", 0x30: "pressed"}
+
+def decode_420(data: bytes) -> dict | None:
+    """Coolant temperature + Brake (10 Hz)"""
+    if len(data) < 7:
+        return None
+    coolant_c = data[0] - 40
+    brake     = _BRAKE_420.get(data[5], f"0x{data[5]:02X}")
+    return {"coolant_c": coolant_c, "brake_pedal": brake}
+
+
+def decode_428(data: bytes) -> dict | None:
+    """Battery voltage (10 Hz)"""
+    if len(data) < 2:
+        return None
+    return {"battery_v": round(data[1] / 10.0, 1)}
+
+
+DECODERS: dict[int, tuple] = {
+    0x201: (decode_201, "fiesta/can/201"),
+    0x360: (decode_360, "fiesta/can/360"),
+    0x420: (decode_420, "fiesta/can/420"),
+    0x428: (decode_428, "fiesta/can/428"),
+}
 
 
 # ── GVRET stream parser ───────────────────────────────────────────────────────
@@ -93,11 +129,7 @@ def redraw(seen: dict, total: int, elapsed: float):
     for can_id in sorted(seen):
         count, data, decoded = seen[can_id]
         hex_str = data.hex(" ").upper()
-        if can_id == 0x201:
-            extra = (f"RPM={decoded['rpm']}  Speed={decoded['speed_kmh']}km/h  Gas={decoded['throttle_pct']}%"
-                     if decoded else "(too short)")
-        else:
-            extra = ""
+        extra = "  ".join(f"{k}={v}" for k, v in decoded.items()) if decoded else ""
         lines.append(f"  0x{can_id:03X}  {count:>7}  {hex_str:<32}  {extra}\n")
     sys.stdout.write("".join(lines))
     sys.stdout.flush()
@@ -106,11 +138,13 @@ def redraw(seen: dict, total: int, elapsed: float):
 # ── Service summary (non-TTY) ─────────────────────────────────────────────────
 def log_summary(seen: dict, total: int, elapsed: float):
     ids = ", ".join(f"0x{cid:03X}:{seen[cid][0]}" for cid in sorted(seen))
-    decoded = seen[0x201][2] if 0x201 in seen else None
-    if decoded:
-        dec = f"  0x201: RPM={decoded['rpm']} Speed={decoded['speed_kmh']}km/h Gas={decoded['throttle_pct']}%"
-    else:
-        dec = ""
+    dec_parts = []
+    for cid in sorted(seen):
+        decoded = seen[cid][2]
+        if decoded:
+            fields = " ".join(f"{k}={v}" for k, v in decoded.items())
+            dec_parts.append(f"0x{cid:03X}: {fields}")
+    dec = ("  " + "  |  ".join(dec_parts)) if dec_parts else ""
     print(f"[summary] {total} frames in {elapsed:.0f}s | {ids}{dec}", flush=True)
 
 
@@ -167,10 +201,12 @@ def main():
                             total += 1
                             entry   = seen.get(can_id)
                             decoded = None
-                            if can_id == 0x201:
-                                decoded = decode_201(data)
+                            decoder = DECODERS.get(can_id)
+                            if decoder:
+                                func, topic = decoder
+                                decoded = func(data)
                                 if decoded:
-                                    publish_queue.put(("fiesta/can/201", json.dumps(decoded)))
+                                    publish_queue.put((topic, json.dumps(decoded)))
                             seen[can_id] = ((entry[0] + 1 if entry else 1), data, decoded)
                     except BlockingIOError:
                         break
