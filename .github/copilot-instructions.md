@@ -15,9 +15,25 @@ The `install.sh` script deploys both into `/usr/local/lib/fiesta-can-bridge/` wi
 
 ## Key protocols
 
-- **GVRET binary protocol**: Magic `0xF1`, command `0x00` for CAN frames. Send `0xE7` on connect to enable binary mode. Full spec in `AGENT.md`.
-- **MS-CAN message catalogue**: Complete decode tables for ~20 CAN IDs in `AGENT.md`. When adding new decoders, follow the existing `decode_201()` pattern (struct.unpack big-endian, return a dict).
+- **GVRET binary protocol**: Magic `0xF1`, command `0x00` for CAN frames. Send `0xE7` on connect to enable binary mode.
 - **MQTT**: Publishes to `broker:1883`, topic pattern `fiesta/can/<id>`. Uses paho-mqtt with async connect and a dedicated publisher thread with a `queue.SimpleQueue`.
+
+### GVRET incoming frame layout (device → host)
+
+```
+Byte 0    : 0xF1  (magic)
+Byte 1    : 0x00  (command = CAN frame)
+Bytes 2-5 : timestamp, uint32 little-endian, microseconds
+Bytes 6-9 : CAN ID, uint32 little-endian; bit 31 set = extended frame
+Byte 10   : len_bus — low 4 bits = DLC, high 4 bits = bus index
+Bytes 11+ : data bytes (DLC bytes)
+Last byte : checksum (XOR of bytes 1..end-1; currently always 0x00)
+Total packet size = 12 + DLC
+```
+
+### MS-CAN message catalogue
+
+`AGENT.md` contains the complete decode tables for ~20 CAN IDs (0x080 clock, 0x201 RPM/speed/gas, 0x420 coolant/brake, 0x428 battery, 0x433 doors/lock, etc.) plus observed-but-undecoded IDs and message frequencies. **Always consult `AGENT.md` before implementing new decoders.**
 
 ## Install & deploy
 
