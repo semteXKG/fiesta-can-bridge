@@ -1,0 +1,8 @@
+# debhelper build artifacts
+.debhelper/
+debhelper-build-stamp
+fiesta-can-bridge/
+fiesta-can-bridge.debhelper.log
+fiesta-can-bridge.postrm.debhelper
+fiesta-can-bridge.substvars
+files
