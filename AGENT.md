@@ -10,6 +10,28 @@
 | Sniffer script | `C:\Users\Klaus\gvret_201.py` |
 | OBD-II test script | `C:\Users\Klaus\obd2_test.py` |
 
+## carpi deployment (Raspberry Pi)
+
+| Item | Value |
+|------|-------|
+| Hostname | carpi |
+| SSH | `semtex@192.168.4.1` |
+| Network | 192.168.4.0/24 (WiCAN WiFi AP) |
+| WiCAN IP | 192.168.4.161 port 23 |
+| Service | `can-bridge.service` (systemd, auto-restart) |
+| Installed to | `/usr/lib/fiesta-can-bridge/` |
+| MQTT broker | Mosquitto running locally on carpi (`127.0.0.1:1883`) |
+
+### Known gotcha — `broker` hostname resolution
+`can-poller.py` connects to MQTT host `broker`. The Pi's DNS server (`10.0.0.1`) is on the
+home LAN which is unreachable from the car WiFi, so `broker` must be pinned in `/etc/hosts`:
+```
+127.0.0.1 broker
+```
+**Note:** `/etc/cloud/cloud.cfg` has `manage_etc_hosts: true`, which may overwrite `/etc/hosts`
+on reboot. If the entry disappears, either add it to
+`/etc/cloud/templates/hosts.debian.tmpl` or set `manage_etc_hosts: false` in cloud.cfg.
+
 ---
 
 ## GVRET Protocol
