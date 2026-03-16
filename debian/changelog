@@ -1,3 +1,8 @@
+fiesta-can-bridge (1.0.1-1) unstable; urgency=medium
+
+  * Release 1.0.1
+
+ -- semtex <semtex@users.noreply.github.com>  Mon, 16 Mar 2026 19:05:30 +0100
 fiesta-can-bridge (1.0.0-1) unstable; urgency=medium
 
   * Initial Debian packaging.
