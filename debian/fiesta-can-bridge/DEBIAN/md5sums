@@ -1,0 +1,6 @@
+e2b6da562f001260a1751930fc6e23fd  usr/bin/can-dashboard
+fcccdb40219a2dad8ab02b1e7f688aaf  usr/lib/fiesta-can-bridge/can-bridge-starter.py
+72c2f7e95985f05cf9308b79d7062a3d  usr/lib/fiesta-can-bridge/can-poller.py
+24d8bedbde44e105ba1f5653b7bf8b63  usr/lib/systemd/system/can-bridge.service
+d0a2210feb92a34d0c85f25d22046cfe  usr/share/doc/fiesta-can-bridge/changelog.Debian.gz
+79fa496da8d31b070d3c81588b8996d1  usr/share/doc/fiesta-can-bridge/copyright

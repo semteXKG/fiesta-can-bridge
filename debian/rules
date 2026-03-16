@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_installsystemd:
+	dh_installsystemd --name=can-bridge
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0755 debian/fiesta-can-bridge/usr/bin/can-dashboard

@@ -1,0 +1,17 @@
+Source: fiesta-can-bridge
+Section: misc
+Priority: optional
+Maintainer: semtex <semtex@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: fiesta-can-bridge
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-paho-mqtt
+Description: Ford Fiesta MK5 MS-CAN bridge — GVRET live decoder and MQTT publisher
+ Connects to a GVRET-compatible CAN interface (e.g. WiCAN) over TCP,
+ decodes MS-CAN frames from a Ford Fiesta MK5 (>2006), and publishes
+ telemetry to an MQTT broker. Includes auto-discovery of the WiCAN
+ device via dnsmasq DHCP lease file and a systemd service for
+ unattended operation on a Raspberry Pi (carpi).

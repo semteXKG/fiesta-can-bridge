@@ -1,0 +1,3 @@
+can-poller.py          usr/lib/fiesta-can-bridge/
+can-bridge-starter.py  usr/lib/fiesta-can-bridge/
+debian/can-dashboard   usr/bin/
