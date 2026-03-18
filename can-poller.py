@@ -152,7 +152,10 @@ def log_summary(seen: dict, total: int, elapsed: float):
 def _mqtt_worker(mqtt_client: mqtt_lib.Client, q: queue.SimpleQueue):
     while True:
         topic, payload = q.get()
-        mqtt_client.publish(topic, payload)
+        try:
+            mqtt_client.publish(topic, payload)
+        except Exception as exc:
+            print(f"[mqtt] publish error: {exc}", flush=True)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -162,6 +165,7 @@ def main():
 
     print(f"Connecting to MQTT {MQTT_HOST}:{MQTT_PORT} …", flush=True)
     mqtt = mqtt_lib.Client(mqtt_lib.CallbackAPIVersion.VERSION2, client_id="can-poller")
+    mqtt.reconnect_delay_set(min_delay=1, max_delay=30)
     mqtt.connect_async(MQTT_HOST, MQTT_PORT)
     mqtt.loop_start()
 

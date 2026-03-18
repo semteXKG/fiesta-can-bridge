@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+HOSTS_LINE="192.168.4.1 broker"
+HOSTS_MARKER="# fiesta-can-bridge"
+
+case "$1" in
+    configure)
+        if ! grep -qF "broker" /etc/hosts; then
+            printf '\n%s %s\n' "$HOSTS_LINE" "$HOSTS_MARKER" >> /etc/hosts
+            echo "Added '$HOSTS_LINE' to /etc/hosts"
+        fi
+        ;;
+esac
+
+#DEBHELPER#

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        sed -i '/broker.*# fiesta-can-bridge/d' /etc/hosts
+        ;;
+esac
+
+#DEBHELPER#

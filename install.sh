@@ -31,6 +31,12 @@ exec /usr/local/lib/fiesta-can-bridge/venv/bin/python /usr/local/lib/fiesta-can-
 EOF
 chmod 0755 "${BIN_DIR}/can-dashboard"
 
+echo "==> Ensuring 'broker' is in /etc/hosts"
+if ! grep -qF "broker" /etc/hosts; then
+    printf '\n192.168.4.1 broker # fiesta-can-bridge\n' >> /etc/hosts
+    echo "Added '192.168.4.1 broker' to /etc/hosts"
+fi
+
 echo "==> Installing systemd service"
 install -m 0644 "${SCRIPT_DIR}/etc/systemd/system/can-bridge.service" \
     "${SERVICE_DIR}/can-bridge.service"
